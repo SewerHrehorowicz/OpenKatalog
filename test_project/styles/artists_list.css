@@ -1,0 +1,39 @@
+/* Artists List Page */
+
+.list_header {
+    font-weight: 200;
+    font-size: 26pt;
+    text-align: justify;
+    text-align-last: justify;
+    margin-top: 10.5mm;
+    margin-bottom: 10.5mm;
+    color: var(--heading-color);
+    z-index: 10;
+    position: relative;
+    letter-spacing: -1pt;
+}
+
+.artists_list {
+    list-style-type: none;
+    padding: 0;
+    margin: 0;
+    z-index: 10;
+    position: relative;
+    height: 70%; /* Reserve 70% of the page height for the list container */
+}
+
+.artists_list li {
+    font-size: var(--mid-font);
+    color: var(--text-color);
+    text-align: left;
+    overflow: hidden; /* Prevent text spilling out if it gets tiny */
+}
+
+.artists_list .town {
+    color: var(--muted-text);
+}
+
+.artists_list .town::before {
+    content: " | ";
+}
+

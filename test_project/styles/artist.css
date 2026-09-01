@@ -1,0 +1,75 @@
+.artists-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 15mm;
+    flex: 1;
+    overflow: hidden;
+}
+
+.artist {
+    display: flex;
+    flex-direction: row;
+    gap: 0; /* Gap is now handled by the divider margins */
+    height: 100%;
+    overflow: hidden;
+    border-bottom: var(--border-size) solid var(--border-color);
+    margin-bottom: 4mm;
+    text-align: justify;
+    box-sizing: border-box;
+}
+
+.artist:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+}
+
+.artist-info {
+    width: 45mm; /* Strict narrow column for info */
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start; /* Align content to the left */
+    justify-content: flex-start; /* Align content to the top */
+    overflow: hidden;
+}
+
+.artist-info .photo {
+    width: 100%;
+    height: 45mm;
+    object-fit: cover; /* prevents aspect ratio distortion */
+    background-color: var(--placeholder-bg); /* placeholder color if image fails */
+    border-radius: 1mm;
+    margin-bottom: 2.5mm;
+}
+
+
+
+.artist-info .contact {
+    font-size: var(--tiny-font);
+    color: var(--muted-text);
+    margin: 0;
+    word-break: break-word;
+}
+
+.divider {
+    width: var(--border-size);
+    background-color: var(--border-color);
+    margin: 0 4mm; /* creates the gap (7.5mm on each side = 15mm total gap) */
+    flex-shrink: 0;
+}
+
+.work-area {
+    flex: 1;
+    min-width: 0; /* Extremely important: prevents flex child from expanding beyond container */
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+.painting {
+    width: 100%;
+    max-height: 70%;
+    object-fit: contain; /* ensures the entire image fits within the bounds without cropping */
+    margin-bottom: 8mm;
+}
+

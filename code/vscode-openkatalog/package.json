@@ -1,0 +1,94 @@
+{
+  "name": "openkatalog",
+  "displayName": "OpenKatalog",
+  "description": "Syntax highlighting for OpenKatalog templates",
+  "version": "0.0.1",
+  "engines": {
+    "vscode": "^1.60.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "openkatalog",
+        "aliases": ["OpenKatalog", "ok"],
+        "extensions": [".tpl"],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "openkatalog",
+        "scopeName": "source.openkatalog",
+        "path": "./syntaxes/openkatalog.tmLanguage.json"
+      }
+    ],
+    "configurationDefaults": {
+      "editor.tokenColorCustomizations": {
+        "textMateRules": [
+          {
+            "scope": "entity.name.type.class.openkatalog",
+            "settings": {
+              "foreground": "#D7BA7D"
+            }
+          },
+          {
+            "scope": "entity.name.tag.openkatalog",
+            "settings": {
+              "foreground": "#569CD6"
+            }
+          },
+          {
+            "scope": "variable.parameter.template.openkatalog",
+            "settings": {
+              "foreground": "#9CDCFE"
+            }
+          },
+          {
+            "scope": "string.quoted.double.openkatalog",
+            "settings": {
+              "foreground": "#CE9178"
+            }
+          },
+          {
+            "scope": "punctuation.bracket.openkatalog",
+            "settings": {
+              "foreground": "#808080"
+            }
+          },
+          {
+            "scope": "variable.other.readwrite.openkatalog",
+            "settings": {
+              "foreground": "#9CDCFE"
+            }
+          },
+          {
+            "scope": "variable.language.system.openkatalog",
+            "settings": {
+              "foreground": "#C586C0",
+              "fontStyle": "italic"
+            }
+          },
+          {
+            "scope": "entity.name.function.openkatalog",
+            "settings": {
+              "foreground": "#DCDCAA"
+            }
+          },
+          {
+            "scope": [
+              "keyword.operator.binder.openkatalog",
+              "keyword.control.openkatalog"
+            ],
+            "settings": {
+              "foreground": "#C586C0",
+              "fontStyle": "bold"
+            }
+          }
+        ]
+      }
+    }
+  }
+}

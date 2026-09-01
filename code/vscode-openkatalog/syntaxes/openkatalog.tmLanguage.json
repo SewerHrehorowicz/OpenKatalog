@@ -1,0 +1,114 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "OpenKatalog",
+  "scopeName": "source.openkatalog",
+  "patterns": [
+    { "include": "#comments" },
+    { "include": "#flow_block" },
+    { "include": "#markup" }
+  ],
+  "repository": {
+    "comments": {
+      "match": "//.*$",
+      "name": "comment.line.double-slash.openkatalog"
+    },
+    "flow_block": {
+      "begin": "(->)",
+      "beginCaptures": {
+        "1": { "name": "keyword.operator.binder.openkatalog" }
+      },
+      "end": "$",
+      "name": "meta.flow.openkatalog",
+      "patterns": [
+        { "include": "#flow_content" }
+      ]
+    },
+    "markup": {
+      "patterns": [
+        {
+          "match": "^\\s*([a-zA-Z_][a-zA-Z0-9_-]*)(?=\\.|\\s|$|->)",
+          "name": "entity.name.tag.openkatalog"
+        },
+        {
+          "match": "(\\.)([a-zA-Z_][a-zA-Z0-9_-]*)",
+          "captures": {
+            "1": { "name": "entity.name.type.class.openkatalog" },
+            "2": { "name": "entity.name.type.class.openkatalog" }
+          }
+        },
+        {
+          "match": "(@)([a-zA-Z_][a-zA-Z0-9_-]*)",
+          "captures": {
+            "1": { "name": "variable.parameter.template.openkatalog" },
+            "2": { "name": "variable.parameter.template.openkatalog" }
+          }
+        }
+      ]
+    },
+    "flow_content": {
+      "patterns": [
+        { "include": "#strings" },
+        { "include": "#system_vars" },
+        { "include": "#functions" },
+        { "include": "#keywords" },
+        { "include": "#identifiers" },
+        { "include": "#punctuation" }
+      ]
+    },
+    "strings": {
+      "begin": "\"",
+      "beginCaptures": { "0": { "name": "string.quoted.double.openkatalog" } },
+      "end": "\"",
+      "endCaptures": { "0": { "name": "string.quoted.double.openkatalog" } },
+      "name": "string.quoted.double.openkatalog",
+      "patterns": [
+        { "include": "#string_interpolation" },
+        { "include": "#system_vars" }
+      ]
+    },
+    "string_interpolation": {
+      "begin": "\\{",
+      "beginCaptures": {
+        "0": { "name": "punctuation.bracket.openkatalog" }
+      },
+      "end": "\\}",
+      "endCaptures": {
+        "0": { "name": "punctuation.bracket.openkatalog" }
+      },
+      "name": "meta.embedded.line.openkatalog",
+      "patterns": [
+        { "include": "#system_vars" },
+        {
+          "match": "[a-zA-Z_][a-zA-Z0-9_-]*",
+          "name": "variable.other.readwrite.openkatalog"
+        },
+        {
+          "match": "\\.",
+          "name": "punctuation.bracket.openkatalog"
+        }
+      ]
+    },
+    "system_vars": {
+      "match": "(\\$)([a-zA-Z_][a-zA-Z0-9_-]*)",
+      "name": "variable.language.system.openkatalog"
+    },
+    "functions": {
+      "match": "\\.([a-zA-Z_][a-zA-Z0-9_-]*)\\s*(?=\\()",
+      "captures": {
+        "1": { "name": "entity.name.function.openkatalog" }
+      }
+    },
+    "keywords": {
+      "match": "\\b(as)\\b",
+      "name": "keyword.control.openkatalog"
+    },
+    "identifiers": {
+      "match": "\\b[a-zA-Z_][a-zA-Z0-9_-]*\\b",
+      "name": "variable.other.readwrite.openkatalog"
+    },
+    "punctuation": {
+      "match": "[,\\(\\)\\[\\]\\{\\}]",
+      "name": "punctuation.bracket.openkatalog"
+    }
+  }
+}

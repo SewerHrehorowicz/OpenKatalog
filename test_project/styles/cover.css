@@ -1,0 +1,16 @@
+.cover h1, .cover h2 {
+    color: white;
+    text-align: center;
+    font-weight: 200;
+    text-shadow: 0 5mm 30mm black;
+}
+
+.cover h1 {
+    font-size: 32pt;
+    
+}
+
+.cover h2 {
+    
+    font-size: 24pt;
+}

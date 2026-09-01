@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.pyc
+
+# Virtual Environment
+.venv/
+env/
+ENV/
+venv/
+.git/
+
+# Exported files
+*.html
+*.pdf

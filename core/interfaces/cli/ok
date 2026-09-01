@@ -1,0 +1,350 @@
+#!/usr/bin/env python3
+import sys
+import os
+import json
+import webbrowser
+
+# Resolve absolute path to core
+CLI_DIR = os.path.dirname(os.path.realpath(__file__))
+CORE_DIR = os.path.dirname(os.path.dirname(CLI_DIR))
+
+# Add CORE_DIR to sys.path to import generator
+sys.path.insert(0, CORE_DIR)
+import generator
+import watcher
+
+CONFIG_DIR = os.path.expanduser("~/.config/ok")
+CONFIG_FILE = os.path.join(CONFIG_DIR, "projects.json")
+CURRENT_FILE = os.path.join(CONFIG_DIR, "current.txt")
+
+def load_projects():
+    if not os.path.exists(CONFIG_FILE):
+        return {}
+    with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
+        try:
+            return json.load(f)
+        except:
+            return {}
+
+def save_projects(projects):
+    os.makedirs(CONFIG_DIR, exist_ok=True)
+    with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
+        json.dump(projects, f, indent=2)
+
+def add_project(path=""):
+    if not path:
+        # Enable readline autocompletion for input()
+        try:
+            import readline
+            import glob
+            
+            def complete_path(text, state):
+                # Expand ~ to home directory for completion
+                expanded_text = os.path.expanduser(text)
+                # Append '*' to get matching paths
+                matches = glob.glob(expanded_text + '*')
+                
+                # Append '/' to directories to help the user
+                matches = [m + '/' if os.path.isdir(m) else m for m in matches]
+                
+                if state < len(matches):
+                    # If we expanded ~, we need to replace the expanded part back with ~
+                    # so the completion replaces what the user typed properly, or just return the expanded match
+                    match = matches[state]
+                    if text.startswith('~'):
+                        match = text + match[len(expanded_text):]
+                    return match
+                else:
+                    return None
+
+            readline.set_completer_delims(' \t\n;')
+            readline.set_completer(complete_path)
+            readline.parse_and_bind('tab: complete')
+        except ImportError:
+            pass # Windows or standard environments without readline
+            
+        print("Type the directory path (you can use Tab to autocomplete):")
+        path = input("Path: ").strip()
+        
+    if not path:
+        print("No path selected.")
+        return
+    
+    path = os.path.abspath(os.path.expanduser(path))
+    if not os.path.isdir(path):
+        print(f"Error: Directory '{path}' does not exist.")
+        return
+        
+    project_name = os.path.basename(path)
+    custom_name = input(f"Project name [{project_name}]: ").strip()
+    if custom_name:
+        project_name = custom_name
+        
+    projects = load_projects()
+    projects[project_name] = path
+    save_projects(projects)
+    print(f"Added project '{project_name}' -> {path}")
+
+def list_projects():
+    projects = load_projects()
+    if not projects:
+        print("No projects registered.")
+        return
+    
+    print("Registered projects:")
+    for name, path in projects.items():
+        print(f"  {name}: {path}")
+
+def get_current_project():
+    if os.path.exists(CURRENT_FILE):
+        with open(CURRENT_FILE, 'r', encoding='utf-8') as f:
+            return f.read().strip()
+    return None
+
+def set_current_project(name):
+    os.makedirs(CONFIG_DIR, exist_ok=True)
+    with open(CURRENT_FILE, 'w', encoding='utf-8') as f:
+        f.write(name)
+    print(f"Set current project to: {name}")
+
+def open_project(name_or_path):
+    projects = load_projects()
+    if name_or_path in projects:
+        set_current_project(name_or_path)
+    else:
+        # Treat as path
+        path = os.path.abspath(os.path.expanduser(name_or_path))
+        if os.path.isdir(path):
+            project_name = os.path.basename(path)
+            projects[project_name] = path
+            save_projects(projects)
+            set_current_project(project_name)
+        else:
+            print(f"Error: Project or directory '{name_or_path}' not found.")
+
+def get_project_path(name_or_path=None):
+    projects = load_projects()
+    
+    if not name_or_path or name_or_path == ".":
+        current = get_current_project()
+        if current and current in projects:
+            return projects[current]
+        elif name_or_path == ".":
+            return os.path.abspath(os.path.expanduser(name_or_path))
+        else:
+            print("Error: No current project set. Use 'ok open [project]' or provide a path.")
+            sys.exit(1)
+            
+    if name_or_path in projects:
+        return projects[name_or_path]
+    return os.path.abspath(os.path.expanduser(name_or_path))
+
+def show_project(target, force_target=None):
+    target_path = get_project_path(target)
+    project_name = os.path.basename(os.path.normpath(target_path))
+    export_html = os.path.join(target_path, 'export', f"{project_name}.html")
+    export_pdf = os.path.join(target_path, 'export', f"{project_name}.pdf")
+    
+    show_target = force_target if force_target else "both"
+    if not force_target:
+        config_file = os.path.join(target_path, 'config.cfg')
+        if os.path.exists(config_file):
+            with open(config_file, 'r', encoding='utf-8') as f:
+                for line in f:
+                    if ':' in line and not line.startswith('#'):
+                        k, v = line.split(':', 1)
+                        if k.strip() == 'show_target':
+                            show_target = v.strip().lower()
+    
+    found_any = False
+    
+    if os.path.exists(export_html) and show_target in ("both", "html"):
+        print(f"Opening HTML at {export_html}...")
+        webbrowser.open(f"file://{os.path.abspath(export_html)}")
+        found_any = True
+        
+    if os.path.exists(export_pdf) and show_target in ("both", "pdf"):
+        print(f"Opening PDF at {export_pdf}...")
+        webbrowser.open(f"file://{os.path.abspath(export_pdf)}")
+        found_any = True
+        
+    if not found_any:
+        print(f"Error: Compiled exports not found in {os.path.join(target_path, 'export')} or restricted by 'show_target'.")
+        print("You may need to run 'ok export' first.")
+
+def remove_project(name):
+    projects = load_projects()
+    if name in projects:
+        del projects[name]
+        save_projects(projects)
+        print(f"Removed project '{name}'")
+    else:
+        print(f"Error: Project '{name}' not found in registered projects.")
+        print("Use 'ok projects' to list available projects.")
+
+def rename_project(old_name, new_name):
+    projects = load_projects()
+    if old_name not in projects:
+        print(f"Error: Project '{old_name}' not found in registered projects.")
+        print("Use 'ok projects' to list available projects.")
+        return
+    
+    path = projects[old_name]
+    
+    # Check if new_name already exists
+    if new_name in projects and new_name != old_name:
+        print(f"Error: Project '{new_name}' already exists.")
+        return
+    
+    # Remove old entry and add with new name
+    del projects[old_name]
+    projects[new_name] = path
+    save_projects(projects)
+    
+    # Rename the directory if it's not the same
+    old_dir = os.path.basename(path)
+    if old_dir != new_name:
+        new_path = os.path.join(os.path.dirname(path), new_name)
+        if os.path.exists(old_dir):
+            try:
+                os.rename(old_dir, new_path)
+                print(f"Renamed directory from '{old_dir}' to '{new_name}'")
+            except Exception as e:
+                print(f"Warning: Could not rename directory: {e}")
+    
+    print(f"Renamed project '{old_name}' to '{new_name}'")
+
+def print_help():
+    print("OpenKatalog CLI")
+    print("Usage:")
+    print("  ok open [project_name]       (Set as current project)")
+    print("  ok add [project_dir]         (Register a new project)")
+    print("  ok remove [project_name]     (Remove a registered project)")
+    print("  ok rename [old_name] [new_name]  (Rename a project)")
+    print("  ok projects                  (List registered projects)")
+    print("  ok export [project] [--pdf] [--no-bleed] (Export a project. Uses current if empty)")
+    print("  ok watch [project]           (Watch project for changes)")
+    print("  ok watch stop [project]      (Stop the active watch process)")
+    print("  ok diagnose [project]        (Diagnose a project. Uses current if empty)")
+    print("  ok show [project] [--pdf]    (Open compiled HTML/PDF in browser)")
+    print("  ok vars                      (List available system variables)")
+    print("  ok plugin --install          (Install the VS Code syntax highlighting plugin)")
+
+def list_vars():
+    print("Available System Variables:")
+    print("  $page     - Automatically increments for each element with a '.page' class")
+    print("  $date     - Current date (YYYY-MM-DD)")
+    print("  $time     - Current time (HH:MM)")
+    print("  $datetime - Current date and time (YYYY-MM-DD HH:MM)")
+    print("  $year     - Current 4-digit year (YYYY)")
+    print("  $month    - Current 2-digit month (MM)")
+    print("  $day      - Current 2-digit day (DD)")
+
+def install_plugin():
+    import shutil
+    ext_dir = os.path.join(CORE_DIR, "..", "code", "vscode-openkatalog")
+    ext_dir = os.path.abspath(ext_dir)
+    
+    if not os.path.exists(ext_dir):
+        print(f"Error: Extension directory not found at {ext_dir}")
+        return
+        
+    vscode_ext_dir = os.path.expanduser("~/.vscode/extensions")
+    target_dir = os.path.join(vscode_ext_dir, "openkatalog-0.0.1")
+    
+    if not os.path.exists(vscode_ext_dir):
+        print("VS Code extensions directory not found. Creating it...")
+        os.makedirs(vscode_ext_dir, exist_ok=True)
+        
+    if os.path.exists(target_dir):
+        shutil.rmtree(target_dir)
+        
+    try:
+        shutil.copytree(ext_dir, target_dir)
+        print("Successfully installed OpenKatalog VS Code plugin!")
+        print("Please restart VS Code for the changes to take effect.")
+    except Exception as e:
+        print(f"Failed to install plugin: {e}")
+
+def main():
+    if '--pdf' in sys.argv:
+        force_pdf = True
+        sys.argv.remove('--pdf')
+    else:
+        force_pdf = False
+
+    if '--no-bleed' in sys.argv:
+        no_bleed = True
+        sys.argv.remove('--no-bleed')
+    else:
+        no_bleed = False
+
+    if len(sys.argv) < 2:
+        print_help()
+        sys.exit(1)
+        
+    cmd = sys.argv[1]
+    
+    if cmd == "add":
+        target = sys.argv[2] if len(sys.argv) > 2 else ""
+        add_project(target)
+    elif cmd == "remove":
+        name = sys.argv[2] if len(sys.argv) > 2 else None
+        if not name:
+            print("Error: Provide a project name to remove.")
+            print_help()
+            sys.exit(1)
+        remove_project(name)
+    elif cmd == "open":
+        target = sys.argv[2] if len(sys.argv) > 2 else ""
+        if not target:
+            print("Error: Provide a project name or path.")
+        else:
+            open_project(target)
+    elif cmd == "rename":
+        old_name = sys.argv[2] if len(sys.argv) > 2 else None
+        new_name = sys.argv[3] if len(sys.argv) > 3 else None
+        if not old_name or not new_name:
+            print("Error: Provide old and new project names.")
+            print_help()
+            sys.exit(1)
+        rename_project(old_name, new_name)
+    elif cmd == "projects":
+        list_projects()
+        current = get_current_project()
+        if current:
+            print(f"\nCurrent active project: {current}")
+    elif cmd == "export":
+        target = sys.argv[2] if len(sys.argv) > 2 else None
+        target_path = get_project_path(target)
+        generator.generate(target_path, force_pdf=force_pdf, no_bleed=no_bleed)
+    elif cmd == "watch":
+        target = sys.argv[2] if len(sys.argv) > 2 else None
+        
+        if target == "stop":
+            target_proj = sys.argv[3] if len(sys.argv) > 3 else None
+            target_path = get_project_path(target_proj)
+            watcher.stop_watch(target_path)
+        else:
+            target_path = get_project_path(target)
+            watcher.start_watch(target_path)
+    elif cmd == "diagnose":
+        target = sys.argv[2] if len(sys.argv) > 2 else None
+        target_path = get_project_path(target)
+        generator.diagnose(target_path)
+    elif cmd == "show":
+        target = sys.argv[2] if len(sys.argv) > 2 else None
+        show_project(target, force_target="pdf" if force_pdf else None)
+    elif cmd == "vars":
+        list_vars()
+    elif cmd == "plugin":
+        if len(sys.argv) > 2 and sys.argv[2] == "--install":
+            install_plugin()
+        else:
+            print("Usage: ok plugin --install")
+    else:
+        print_help()
+        sys.exit(1)
+
+if __name__ == "__main__":
+    main()
