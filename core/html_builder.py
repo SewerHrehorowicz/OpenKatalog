@@ -1,5 +1,6 @@
 import re
 import os
+import json
 
 def build_css_string(config, css_string, image_registry):
     width_str = config.get('page_width', '210mm')
@@ -54,7 +55,7 @@ def insert_into_head(html_lines, content):
         else:
             html_lines.insert(0, f"<head>{content}</head>")
 
-def build_final_html(html_lines, config, css_string, image_registry, is_watch, index_nodes):
+def build_final_html(html_lines, config, css_string, image_registry, is_watch, index_nodes, page_nums=None):
     final_css = build_css_string(config, css_string, image_registry)
 
     insert_into_head(html_lines, '<meta charset="UTF-8">')
@@ -84,6 +85,11 @@ def build_final_html(html_lines, config, css_string, image_registry, is_watch, i
             minified_html = minified_html.replace("</body>", lr_script + "</body>")
         else:
             minified_html += lr_script
+
+        if page_nums:
+            pages_data = json.dumps(page_nums)
+            nav_data_script = f'<script>var OK_PAGES={pages_data};</script>'
+            minified_html = minified_html.replace("</body>", nav_data_script + "</body>")
 
         if nav_html:
             nav_script = '<script src="/nav.js"></script>'

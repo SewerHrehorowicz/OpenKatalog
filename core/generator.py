@@ -36,7 +36,9 @@ def get_system_vars(config):
         '$datetime': now.strftime("%Y-%m-%d %H:%M"),
         '$year': now.strftime("%Y"),
         '$month': now.strftime("%m"),
-        '$day': now.strftime("%d")
+        '$day': now.strftime("%d"),
+        '_page_nums': [],
+        '_page_uses_num': []
     }
     for k, v in config.items():
         sys_vars[f"${k}"] = v
@@ -103,11 +105,14 @@ def generate(project_dir, is_watch=False, force_pdf=False, no_bleed=False):
         
     sys_vars = get_system_vars(config)
     image_registry = {}
-    
+
     html_lines = render_html(index_nodes, {}, models_data, templates, project_dir, image_registry, 0, False, global_data, sys_vars)
     css_string = read_styles(project_dir)
-    
-    minified_html = build_final_html(html_lines, config, css_string, image_registry, is_watch, index_nodes)
+
+    page_nums = sys_vars.get('_page_nums', [])
+    uses_num = sys_vars.get('_page_uses_num', [])
+    page_nums = [num if uses else None for num, uses in zip(page_nums, uses_num)]
+    minified_html = build_final_html(html_lines, config, css_string, image_registry, is_watch, index_nodes, page_nums)
     write_outputs(project_dir, minified_html, config, is_watch, force_pdf)
 
 def diagnose(project_dir):

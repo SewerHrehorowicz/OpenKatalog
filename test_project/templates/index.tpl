@@ -4,6 +4,7 @@ html
         .page.cover.large-margin
             img.background_photo.absolute_wrapper -> cover
             .absolute_wrapper
+                img.logo -> logo
                 h1 -> "{title} {$year}"
                 h2 -> "Planer malarski coroczny w ustce"
 

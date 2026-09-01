@@ -14,6 +14,21 @@
         }
     });
 
+    function getPageTitle(page) {
+        const heading = page.querySelector('h1, h2, h3, h4, h5, h6');
+        if (heading) {
+            return heading.textContent.trim();
+        }
+        return '';
+    }
+
+    function getPageNum(index) {
+        if (typeof OK_PAGES !== 'undefined' && OK_PAGES[index] != null) {
+            return OK_PAGES[index];
+        }
+        return '';
+    }
+
     function buildNav() {
         list.innerHTML = '';
         const pages = document.querySelectorAll('.page');
@@ -21,7 +36,20 @@
             const li = document.createElement('li');
             const a = document.createElement('a');
             a.href = '#';
-            a.textContent = 'Page ' + (i + 1);
+            const num = i + 1;
+            const title = getPageTitle(page);
+            const pageNum = getPageNum(i);
+            let label = num + ': ';
+            if (title) {
+                label += title;
+            }
+            if (pageNum) {
+                label += ' (' + pageNum + ')';
+            }
+            if (!title && !pageNum) {
+                label += 'Page ' + num;
+            }
+            a.textContent = label;
             a.addEventListener('click', function (e) {
                 e.preventDefault();
                 page.scrollIntoView({ behavior: 'smooth', block: 'start' });
