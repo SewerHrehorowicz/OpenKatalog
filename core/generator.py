@@ -1,4 +1,6 @@
 import os
+import re
+import json
 from data_bridge import FileSystemDataBridge
 from renderer import render_html
 from styler import read_styles
@@ -6,6 +8,156 @@ from pdf_exporter import print_pdf
 from template_loader import load_templates
 from html_builder import build_final_html
 import datetime
+
+def extract_template_variables(nodes, variables=None):
+    """Recursively extract all variable names from template nodes."""
+    if variables is None:
+        variables = {}
+    
+    for node in nodes:
+        mapping = node.get('mapping')
+        if mapping:
+            # Remove .shy() suffix if present
+            clean_mapping = mapping[:-6] if mapping.endswith('.shy()') else mapping
+            
+            # Case 1: Simple variable (no dots, parens, spaces, $, or quotes)
+            if (clean_mapping and 
+                not clean_mapping.startswith('$') and 
+                not clean_mapping.startswith('"') and
+                '.' not in clean_mapping and
+                '(' not in clean_mapping and
+                ' ' not in clean_mapping):
+                if clean_mapping not in variables:
+                    variables[clean_mapping] = []
+                variables[clean_mapping].append({
+                    'file': os.path.basename(node.get('file', '')),
+                    'line': node.get('line', 0)
+                })
+            # Case 2: Interpolated string - extract {var_name} patterns
+            elif clean_mapping.startswith('"'):
+                string_vars = re.findall(r'\{([a-zA-Z_]\w*)\}', clean_mapping)
+                for var in string_vars:
+                    if var not in variables:
+                        variables[var] = []
+                    variables[var].append({
+                        'file': os.path.basename(node.get('file', '')),
+                        'line': node.get('line', 0)
+                    })
+            # Case 3: Complex mapping - extract variable after 'as' keyword
+            #           and variable names from method arguments
+            else:
+                as_match = re.search(r'\bas\s+([a-zA-Z_]\w*)\b', clean_mapping)
+                if as_match:
+                    as_var = as_match.group(1)
+                    if as_var not in variables:
+                        variables[as_var] = []
+                    variables[as_var].append({
+                        'file': os.path.basename(node.get('file', '')),
+                        'line': node.get('line', 0)
+                    })
+                
+                # Extract variable names from method arguments (e.g., sort_by(last_name, first_name))
+                arg_matches = re.findall(r'\(([^)]+)\)', clean_mapping)
+                for args in arg_matches:
+                    for arg in re.split(r'\s*,\s*', args):
+                        arg = arg.strip()
+                        if re.match(r'^[a-zA-Z_]\w*$', arg) and not arg.startswith('$'):
+                            if arg not in variables:
+                                variables[arg] = []
+                            variables[arg].append({
+                                'file': os.path.basename(node.get('file', '')),
+                                'line': node.get('line', 0)
+                            })
+        if node.get('children'):
+            extract_template_variables(node['children'], variables)
+    
+    return variables
+
+def build_usage_index(project_dir, templates, models_data, global_data):
+    """Build an index of all template variables and their data file locations."""
+    data_dir = os.path.join(project_dir, 'data')
+    
+    # Get all variables from all templates
+    all_variables = {}
+    for tpl_name, nodes in templates.items():
+        extract_template_variables(nodes, all_variables)
+    
+    # Also extract from index nodes (they're stored separately)
+    # Actually templates already includes index.tpl as 'index'
+    
+    # Build index: variable -> { exists, locations }
+    usage_index = {}
+    
+    for var_name in all_variables:
+        locations = find_variable_in_data(data_dir, var_name)
+        usage_index[var_name] = {
+            'exists': len(locations) > 0,
+            'template_locations': all_variables[var_name],
+            'data_locations': locations
+        }
+    
+    return usage_index
+
+def find_variable_in_data(data_dir, variableName):
+    """Find all data file locations for a variable."""
+    locations = []
+    if not os.path.exists(data_dir):
+        return locations
+    
+    for entry in os.listdir(data_dir):
+        full_path = os.path.join(data_dir, entry)
+        if os.path.isdir(full_path):
+            # Search in model subdirectories
+            locations.extend(_search_data_file(full_path, variableName, data_dir))
+        elif entry == 'data.txt':
+            _check_data_txt(full_path, variableName, data_dir, locations)
+        elif not entry.startswith('.'):
+            # Check global data files (e.g., cover.png, logo.svg, group_photo.jpg)
+            base_name = os.path.splitext(entry)[0]
+            if base_name.lower() == variableName.lower():
+                rel_path = os.path.relpath(full_path, data_dir)
+                locations.append({
+                    'file': rel_path,
+                    'type': 'global_file'
+                })
+    
+    return locations
+
+def _search_data_file(dir_path, variableName, data_dir):
+    """Recursively search a directory for variable references."""
+    locations = []
+    for entry in os.listdir(dir_path):
+        full_path = os.path.join(dir_path, entry)
+        if os.path.isdir(full_path):
+            locations.extend(_search_data_file(full_path, variableName, data_dir))
+        elif entry == 'data.txt':
+            _check_data_txt(full_path, variableName, data_dir, locations)
+        elif not entry.startswith('.'):
+            base_name = os.path.splitext(entry)[0]
+            if base_name.lower() == variableName.lower():
+                rel_path = os.path.relpath(full_path, data_dir)
+                locations.append({
+                    'file': rel_path,
+                    'type': 'file'
+                })
+    return locations
+
+def _check_data_txt(file_path, variableName, data_dir, locations):
+    """Check a data.txt file for a variable key."""
+    try:
+        with open(file_path, 'r', encoding='utf-8') as f:
+            for line_num, line in enumerate(f, 1):
+                if ':' in line:
+                    key = line.split(':', 1)[0].strip()
+                    if key == variableName:
+                        rel_path = os.path.relpath(file_path, data_dir)
+                        locations.append({
+                            'file': rel_path,
+                            'type': 'key',
+                            'line': line_num
+                        })
+    except (IOError, UnicodeDecodeError):
+        pass
 
 def load_config(project_dir):
     config_path = os.path.join(project_dir, 'config.cfg')
@@ -115,6 +267,46 @@ def generate(project_dir, is_watch=False, force_pdf=False, no_bleed=False):
     page_nums = [num if uses else None for num, uses in zip(page_nums, uses_num)]
     minified_html = build_final_html(html_lines, config, css_string, image_registry, is_watch, index_nodes, page_nums)
     write_outputs(project_dir, minified_html, config, is_watch, force_pdf)
+    
+    # Build and write usage index for VS Code extension
+    all_variables = {}
+    for tpl_name, nodes in templates.items():
+        extract_template_variables(nodes, all_variables)
+    usage_index = bridge.get_usage_index(all_variables)
+    
+    # Store in cache directory (not versioned)
+    cache_dir = os.path.join(project_dir, '.ok')
+    os.makedirs(cache_dir, exist_ok=True)
+    index_path = os.path.join(cache_dir, 'usage_index.json')
+    with open(index_path, 'w', encoding='utf-8') as f:
+        json.dump(usage_index, f, indent=2)
+
+def generate_usage_index_only(project_dir):
+    """Lightweight command - rebuilds only the usage index without rendering."""
+    data_dir = os.path.join(project_dir, 'data')
+    tpl_dir = os.path.join(project_dir, 'templates')
+    
+    bridge = FileSystemDataBridge(data_dir)
+    templates, index_nodes = load_templates(tpl_dir)
+    
+    if not templates:
+        print("No templates found.")
+        return
+    
+    all_variables = {}
+    for tpl_name, nodes in templates.items():
+        extract_template_variables(nodes, all_variables)
+    
+    usage_index = bridge.get_usage_index(all_variables)
+    
+    # Store in cache directory (not versioned)
+    cache_dir = os.path.join(project_dir, '.ok')
+    os.makedirs(cache_dir, exist_ok=True)
+    index_path = os.path.join(cache_dir, 'usage_index.json')
+    with open(index_path, 'w', encoding='utf-8') as f:
+        json.dump(usage_index, f, indent=2)
+    
+    print(f"Usage index rebuilt: {len(usage_index)} variables tracked")
 
 def diagnose(project_dir):
     """Runs a diagnosis to find missing or unused data."""

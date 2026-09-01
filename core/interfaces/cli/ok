@@ -332,6 +332,10 @@ def main():
         target = sys.argv[2] if len(sys.argv) > 2 else None
         target_path = get_project_path(target)
         generator.diagnose(target_path)
+    elif cmd == "index":
+        target = sys.argv[2] if len(sys.argv) > 2 else None
+        target_path = get_project_path(target)
+        generator.generate_usage_index_only(target_path)
     elif cmd == "show":
         target = sys.argv[2] if len(sys.argv) > 2 else None
         show_project(target, force_target="pdf" if force_pdf else None)

@@ -15,3 +15,8 @@ venv/
 # Exported files
 *.html
 *.pdf
+
+# OK cache (usage index, image cache, etc.)
+.ok/
+export/.imgcache/
+export/.image_cache_state.json

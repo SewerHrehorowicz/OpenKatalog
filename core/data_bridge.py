@@ -3,17 +3,73 @@ import os
 class DataBridge:
     """
     Abstract base class for Data Bridges.
-    A Data Bridge is responsible for fetching data and shaping it into 
-    the standardized dictionary structures (models_data, global_data) 
-    that the OpenKatalog template renderer expects.
+    
+    A DataBridge translates from any data source into the standardized
+    intermediate format that the OpenKatalog template renderer expects.
+    
+    The renderer and templates are completely decoupled from data storage.
+    Whether data lives in files, PostgreSQL, MongoDB, or a REST API, the
+    output format is always identical.
+    
+    Standard intermediate format:
+        models_data = {
+            "model_name": [              # e.g., "artists"
+                {
+                    "__dir__": "item_id",     # directory/name identifier
+                    "key1": "value1",         # data fields
+                    "key2": "value2",
+                    "_metadata": {"used": set(), "available": set()}
+                },
+                ...
+            ]
+        }
+        
+        global_data = {
+            "cover": "data/cover.png",    # global files/values
+            "title": "Catalog Title",
+            ...
+        }
     """
     
     def fetch_data(self):
         """
         Must be implemented by subclasses.
         Should return a tuple: (models_data, global_data)
+        in the standard intermediate format described above.
         """
         raise NotImplementedError("DataBridge subclasses must implement fetch_data()")
+    
+    def get_usage_index(self, template_variables):
+        """
+        Build a usage index for template variables.
+        
+        Args:
+            template_variables: dict of {variable_name: [{file, line}, ...]}
+                             extracted from templates.
+        
+        Returns:
+            dict of {variable_name: {"exists": bool, "template_locations": [...], "data_locations": [...]}}
+            
+        Default implementation checks against fetch_data() output.
+        Subclasses may override for more efficient implementation
+        (e.g., SQL query for PostgreSQL).
+        """
+        models_data, global_data = self.fetch_data()
+        usage_index = {}
+        data_dir = getattr(self, 'data_root', None)
+        
+        for var_name, tpl_locations in template_variables.items():
+            data_locations = []
+            if data_dir:
+                from generator import find_variable_in_data
+                data_locations = find_variable_in_data(data_dir, var_name)
+            usage_index[var_name] = {
+                'exists': len(data_locations) > 0,
+                'template_locations': tpl_locations,
+                'data_locations': data_locations
+            }
+        
+        return usage_index
 
 
 class FileSystemDataBridge(DataBridge):
