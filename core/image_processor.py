@@ -4,12 +4,42 @@ import base64
 import hashlib
 import mimetypes
 import re
+import json
 
 try:
     from PIL import Image
     HAS_PIL = True
 except ImportError:
     HAS_PIL = False
+
+_CACHE_STATE_FILE = '.image_cache_state.json'
+_cache_state_cache = {}  # module-level cache to avoid re-reading file
+
+def _load_cache_state(project_dir):
+    """Load persisted image cache state from file (with in-memory caching)."""
+    abs_dir = os.path.abspath(project_dir)
+    if abs_dir in _cache_state_cache:
+        return _cache_state_cache[abs_dir]
+    cache_file = os.path.join(abs_dir, 'export', _CACHE_STATE_FILE)
+    if os.path.exists(cache_file):
+        try:
+            with open(cache_file, 'r', encoding='utf-8') as f:
+                state = json.load(f)
+        except (json.JSONDecodeError, IOError):
+            state = {'mtimes': {}, 'hashes': {}}
+    else:
+        state = {'mtimes': {}, 'hashes': {}}
+    _cache_state_cache[abs_dir] = state
+    return state
+
+def _save_cache_state(project_dir, state):
+    """Save image cache state to file (and update in-memory cache)."""
+    abs_dir = os.path.abspath(project_dir)
+    cache_file = os.path.join(abs_dir, 'export', _CACHE_STATE_FILE)
+    os.makedirs(os.path.dirname(cache_file), exist_ok=True)
+    with open(cache_file, 'w', encoding='utf-8') as f:
+        json.dump(state, f)
+    _cache_state_cache[abs_dir] = state
 
 def parse_length_to_px(length_str, dpi=300):
     match = re.match(r'^([\d.]+)(mm|cm|in|px|pt)?$', str(length_str).strip().lower())
@@ -50,9 +80,31 @@ def process_image(val, project_dir, sys_vars, mapping_key, image_registry):
     if not mime_type or not mime_type.startswith('image/'):
         return "", f' src="{val}"'
 
+    # Check if source file changed since last build (mtime-based skip)
+    cache_state = _load_cache_state(project_dir)
+    mtimes = cache_state.get('mtimes', {})
+    hashes = cache_state.get('hashes', {})
+    mtime_key = os.path.normpath(val)
+    try:
+        current_mtime = os.path.getmtime(full_path)
+    except OSError:
+        current_mtime = 0
+
+    # Check if cache file exists (using resized hash from cache state)
+    if mtimes.get(mtime_key) == current_mtime and mtime_key in hashes:
+        is_watch = sys_vars.get('_is_watch', False)
+        img_hash = hashes[mtime_key]
+        if is_watch:
+            ext = os.path.splitext(full_path)[1].lower()
+            cache_name = f"{img_hash[:12]}{ext}"
+            cache_path = os.path.join(project_dir, 'export', '.imgcache', cache_name)
+            if os.path.exists(cache_path):
+                return "", f' src=".imgcache/{cache_name}"'
+            # Cache file missing — fall through to regenerate
+
     with open(full_path, 'rb') as img_f:
         img_data = img_f.read()
-    
+
     # Image resizing logic to save space
     if HAS_PIL and mime_type in ('image/jpeg', 'image/png', 'image/webp'):
         try:
@@ -99,7 +151,13 @@ def process_image(val, project_dir, sys_vars, mapping_key, image_registry):
         except Exception as e:
             print(f"Warning: Failed to resize image {val}: {e}")
             
+    # Hash the final (possibly resized) image data
     img_hash = hashlib.md5(img_data).hexdigest()
+    
+    # Update cache state with resized hash and mtime
+    mtimes[mtime_key] = current_mtime
+    hashes[mtime_key] = img_hash
+    _save_cache_state(project_dir, {'mtimes': mtimes, 'hashes': hashes})
     
     # Watch mode: save to cache directory, return URL path
     is_watch = sys_vars.get('_is_watch', False)
