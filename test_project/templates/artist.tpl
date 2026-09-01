@@ -7,4 +7,4 @@
 
     .work-area
         img.painting -> image
-        p.base-text -> description
+        p.base-text -> description.shy()

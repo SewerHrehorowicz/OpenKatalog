@@ -1,4 +1,5 @@
 {
+  "publisher": "cvlt",
   "name": "openkatalog",
   "displayName": "OpenKatalog",
   "description": "Syntax highlighting for OpenKatalog templates",

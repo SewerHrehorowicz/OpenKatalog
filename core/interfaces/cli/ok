@@ -250,7 +250,7 @@ def install_plugin():
         return
         
     vscode_ext_dir = os.path.expanduser("~/.vscode/extensions")
-    target_dir = os.path.join(vscode_ext_dir, "openkatalog-0.0.1")
+    target_dir = os.path.join(vscode_ext_dir, "cvlt.openkatalog-0.0.1")
     
     if not os.path.exists(vscode_ext_dir):
         print("VS Code extensions directory not found. Creating it...")

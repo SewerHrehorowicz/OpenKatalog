@@ -56,3 +56,23 @@ def apply_typography(text, lang='en'):
         text = pattern.sub(replacement, text)
         
     return text
+
+def apply_shy(text, lang='en'):
+    """
+    Apply only soft hyphen insertion for long words (no nbsp rules).
+    """
+    if not text:
+        return text
+        
+    if isinstance(lang, list):
+        lang = lang[0]
+        
+    lang = str(lang).lower().strip()
+    
+    # Apply only the soft hyphen rule (last rule in each language)
+    rules = TYPOGRAPHY_RULES.get(lang, [])
+    if rules:
+        pattern, replacement = rules[-1]  # shy rule is always last
+        text = pattern.sub(replacement, text)
+        
+    return text

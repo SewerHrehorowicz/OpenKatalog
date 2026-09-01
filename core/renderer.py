@@ -1,11 +1,24 @@
 import os
 import re
 import html
-from typography import apply_typography
+from typography import apply_shy
 from utils import get_value_by_path, resolve_mapping_value
 from image_processor import process_image
 
 SELF_CLOSING = {'img', 'br', 'hr', 'input', 'meta', 'link'}
+
+_NBSP_RULES = {
+    'pl': re.compile(r'\b([a-zA-Z])\s+'),
+    'cs': re.compile(r'\b([a-zA-Z])\s+'),
+    'sk': re.compile(r'\b([a-zA-Z])\s+'),
+}
+
+def _apply_nbsp(text, lang):
+    """Apply non-breaking space insertion for single-letter orphans."""
+    pattern = _NBSP_RULES.get(lang)
+    if pattern:
+        return pattern.sub(r'\1&nbsp;', text)
+    return text
 
 def handle_component_inclusion(node, context, models_data, templates, project_dir, image_registry, indent_level, diagnostics_mode, global_data, sys_vars):
     tag = node['tag']
@@ -105,6 +118,11 @@ def handle_loop_mapping(node, m, context, models_data, templates, project_dir, i
     return inner_html
 
 def handle_scalar_mapping(node, m, context, global_data, sys_vars, diagnostics_mode):
+    # Check for .shy() suffix to apply soft hyphens
+    use_shy = m.endswith('.shy()')
+    if use_shy:
+        m = m[:-6]  # Remove '.shy()' suffix
+
     if m.startswith('"') and m.endswith('"'):
         val = m[1:-1]
         # Check if $page_num is referenced in the string
@@ -124,14 +142,14 @@ def handle_scalar_mapping(node, m, context, global_data, sys_vars, diagnostics_m
                 v = ""
             return str(v)
 
-        return re.sub(r'\{([^}]+)\}', replace_var, val)
+        val = re.sub(r'\{([^}]+)\}', replace_var, val)
     else:
         if m == '$page_num.restart()':
             sys_vars['$page_num'] = 0
-            return ""
+            return ("", use_shy)
         if m == '$page_num':
             _increment_page_num(sys_vars)
-            return str(sys_vars['$page_num'])
+            return (str(sys_vars['$page_num']), use_shy)
         if '_metadata' in context and not m.startswith('$'):
             context['_metadata']['used'].add(m.split('.')[0])
 
@@ -140,7 +158,7 @@ def handle_scalar_mapping(node, m, context, global_data, sys_vars, diagnostics_m
             process_missing_metadata(context, m, diagnostics_mode, node)
             val = ""
 
-    return str(val)
+    return (str(val), use_shy)
 
 
 def _increment_page_num(sys_vars):
@@ -243,7 +261,7 @@ def render_html(nodes, context, models_data, templates, project_dir, image_regis
 
             # 4. Scalar mapping (e.g., 'photo', 'name', 'header')
             else:
-                val = handle_scalar_mapping(node, m, context, global_data, sys_vars, diagnostics_mode)
+                val, use_shy = handle_scalar_mapping(node, m, context, global_data, sys_vars, diagnostics_mode)
                 
                 # Implicitly omit the entire element and its children if the mapped scalar value is empty
                 if not val.strip():
@@ -258,7 +276,9 @@ def render_html(nodes, context, models_data, templates, project_dir, image_regis
                     src_attr = new_src
                 else:
                     text_content = val
-                    
+                    if use_shy:
+                        # Mark for shy application after html.escape
+                        node['_use_shy'] = True
         # Render children normally if not handled by a loop mapping
         if not (node['mapping'] and ' as ' in node['mapping']) and node['children']:
             inner_html.extend(render_html(node['children'], context, models_data, templates, project_dir, image_registry, indent_level + 1, diagnostics_mode, global_data, sys_vars))
@@ -280,9 +300,17 @@ def render_html(nodes, context, models_data, templates, project_dir, image_regis
             escaped_text = escaped_text.replace('&lt;br&gt;', '<br>')
             escaped_text = escaped_text.replace('\\n', '<br>')
             
-            # Apply language-specific typography rules
+            # Apply automatic nbsp insertion for languages that need it (pl, cs, sk)
             lang = sys_vars.get('$lang', 'en') if sys_vars else 'en'
-            escaped_text = apply_typography(escaped_text, lang)
+            if isinstance(lang, list):
+                lang = lang[0]
+            lang = str(lang).lower().strip()
+            if lang in ('pl', 'cs', 'sk'):
+                escaped_text = _apply_nbsp(escaped_text, lang)
+            
+            # Apply explicit .shy() soft hyphens after escaping
+            if node.get('_use_shy'):
+                escaped_text = apply_shy(escaped_text, lang)
             
             if inner_html or (not inner_html and escaped_text == ""):
                 html_lines.append(f"{indent_str}<{tag}{attr_str}>")
