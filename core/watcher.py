@@ -52,6 +52,17 @@ class LiveReloadHandler(http.server.SimpleHTTPRequestHandler):
                     self.wfile.write(f.read())
             else:
                 self.wfile.write(b"console.error('livereload.js not found');")
+        elif self.path == '/nav.js':
+            self.send_response(200)
+            self.send_header('Content-type', 'application/javascript')
+            self.send_header('Cache-Control', 'no-store')
+            http.server.SimpleHTTPRequestHandler.end_headers(self)
+            script_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'nav.js')
+            if os.path.exists(script_path):
+                with open(script_path, 'rb') as f:
+                    self.wfile.write(f.read())
+            else:
+                self.wfile.write(b"console.error('nav.js not found');")
         else:
             # If the user hits Ctrl+R on the main page, force a rebuild as well
             if self.path.endswith('.html'):
@@ -172,30 +183,46 @@ def watch_loop(project_dir):
 def start_watch(project_dir):
     pid_file = get_pid_file(project_dir)
     if os.path.exists(pid_file):
-        print("Watch process is already running for this project.")
-        return
-        
+        # Check if the PID is stale (process no longer exists, e.g. after restart)
+        with open(pid_file, 'r') as f:
+            pid_str = f.read().strip()
+        if pid_str.isdigit() and not _process_exists(int(pid_str)):
+            os.remove(pid_file)
+        else:
+            print("Watch process is already running for this project.")
+            return
+
     # Spawn background process
     script_path = os.path.abspath(__file__)
     subprocess.Popen([sys.executable, script_path, "run", project_dir],
                      stdout=sys.stdout, stderr=sys.stderr)
+
+
+def _process_exists(pid):
+    """Check if a process with the given PID is currently running (Windows-safe)."""
+    try:
+        os.kill(pid, 0)
+    except OSError:
+        return False
+    return True
 
 def stop_watch(project_dir):
     pid_file = get_pid_file(project_dir)
     if not os.path.exists(pid_file):
         print("No active watch process found for this project.")
         return
-        
+
     with open(pid_file, 'r') as f:
         pid_str = f.read().strip()
-        
+
     if pid_str.isdigit():
         pid = int(pid_str)
         try:
             os.kill(pid, signal.SIGTERM)
             print(f"Stopped watch process (PID: {pid}).")
-        except ProcessLookupError:
-            print("Process not found. It might have already exited.")
+        except OSError:
+            # Process doesn't exist (e.g., after system restart) or can't be signaled
+            print(f"Process (PID: {pid}) not found. Cleaning up stale lock file.")
     os.remove(pid_file)
 
 if __name__ == "__main__":

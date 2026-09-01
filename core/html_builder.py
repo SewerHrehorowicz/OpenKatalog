@@ -1,4 +1,5 @@
 import re
+import os
 
 def build_css_string(config, css_string, image_registry):
     width_str = config.get('page_width', '210mm')
@@ -55,28 +56,55 @@ def insert_into_head(html_lines, content):
 
 def build_final_html(html_lines, config, css_string, image_registry, is_watch, index_nodes):
     final_css = build_css_string(config, css_string, image_registry)
-    
+
     insert_into_head(html_lines, '<meta charset="UTF-8">')
-    
+
     if final_css:
         insert_into_head(html_lines, f"<style>{final_css}</style>")
-    
+
     if index_nodes and index_nodes[0]['tag'] == 'html':
         html_lines.insert(0, "<!DOCTYPE html>")
-        
+
     lang = config.get('lang', 'en')
     for i, line in enumerate(html_lines):
         if line.lstrip().startswith('<html') and 'lang=' not in line:
             html_lines[i] = line.replace('<html', f'<html lang="{lang}"', 1)
             break
-            
+
+    if is_watch:
+        nav_html, nav_css = _load_nav_assets()
+        if nav_css:
+            insert_into_head(html_lines, f"<style>{nav_css}</style>")
+
     minified_html = "".join(line.strip() for line in html_lines)
-        
+
     if is_watch:
         lr_script = '<script src="/livereload.js"></script>'
         if "</body>" in minified_html:
             minified_html = minified_html.replace("</body>", lr_script + "</body>")
         else:
             minified_html += lr_script
-            
+
+        if nav_html:
+            nav_script = '<script src="/nav.js"></script>'
+            if "</body>" in minified_html:
+                minified_html = minified_html.replace("</body>", nav_html + nav_script + "</body>")
+            else:
+                minified_html += nav_html + nav_script
+
     return minified_html
+
+
+def _load_nav_assets():
+    base = os.path.dirname(os.path.abspath(__file__))
+    html_path = os.path.join(base, "nav.html")
+    css_path = os.path.join(base, "nav.css")
+    html = ""
+    css = ""
+    if os.path.exists(html_path):
+        with open(html_path, "r", encoding="utf-8") as f:
+            html = f.read()
+    if os.path.exists(css_path):
+        with open(css_path, "r", encoding="utf-8") as f:
+            css = f.read()
+    return html, css
