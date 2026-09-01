@@ -101,6 +101,19 @@ def process_image(val, project_dir, sys_vars, mapping_key, image_registry):
             
     img_hash = hashlib.md5(img_data).hexdigest()
     
+    # Watch mode: save to cache directory, return URL path
+    is_watch = sys_vars.get('_is_watch', False)
+    if is_watch:
+        cache_dir = os.path.join(project_dir, 'export', '.imgcache')
+        os.makedirs(cache_dir, exist_ok=True)
+        ext = os.path.splitext(full_path)[1].lower()
+        cache_name = f"{img_hash[:12]}{ext}"
+        cache_path = os.path.join(cache_dir, cache_name)
+        if not os.path.exists(cache_path):
+            with open(cache_path, 'wb') as f:
+                f.write(img_data)
+        return "", f' src=".imgcache/{cache_name}"'
+    
     if img_hash not in image_registry:
         b64_str = base64.b64encode(img_data).decode('utf-8')
         class_name = f"b64img-{img_hash[:8]}"

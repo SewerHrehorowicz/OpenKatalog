@@ -104,6 +104,7 @@ def generate(project_dir, is_watch=False, force_pdf=False, no_bleed=False):
         return
         
     sys_vars = get_system_vars(config)
+    sys_vars['_is_watch'] = is_watch
     image_registry = {}
 
     html_lines = render_html(index_nodes, {}, models_data, templates, project_dir, image_registry, 0, False, global_data, sys_vars)

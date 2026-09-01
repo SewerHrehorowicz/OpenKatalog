@@ -175,6 +175,7 @@ def render_html(nodes, context, models_data, templates, project_dir, image_regis
         }
         sys_vars['_page_nums'] = []
         sys_vars['_page_uses_num'] = []
+        sys_vars['_is_watch'] = False
 
     html_lines = []
     indent_str = "  " * indent_level
