@@ -42,33 +42,73 @@ class DataBridge:
     def get_usage_index(self, template_variables):
         """
         Build a usage index for template variables.
-        
-        Args:
-            template_variables: dict of {variable_name: [{file, line}, ...]}
-                             extracted from templates.
-        
-        Returns:
-            dict of {variable_name: {"exists": bool, "template_locations": [...], "data_locations": [...]}}
-            
-        Default implementation checks against fetch_data() output.
-        Subclasses may override for more efficient implementation
-        (e.g., SQL query for PostgreSQL).
+
+        Uses the already-fetched models_data and global_data so that
+        model fields (e.g. artist.first_name) and global keys are
+        recognised without a second filesystem scan.
         """
         models_data, global_data = self.fetch_data()
         usage_index = {}
-        data_dir = getattr(self, 'data_root', None)
-        
+
+        # Collect all known global keys and their actual values/paths
+        global_keys = {}
+        for key, val in global_data.items():
+            global_keys[key] = val
+
+        # Collect all known model fields with their actual values/paths
+        model_fields = {}  # field_name -> list of {model, item, value, type}
+        for model_name, items in models_data.items():
+            for item in items:
+                for key in item.get('_metadata', {}).get('available', set()):
+                    val = item.get(key, '')
+                    entry = {
+                        'model': model_name,
+                        'item': item.get('__dir__', ''),
+                        'value': val,
+                        'type': 'field'
+                    }
+                    # Distinguish file-based fields from data.txt keys
+                    if isinstance(val, str) and ('/' in val or '\\' in val or val.endswith('.jpg') or val.endswith('.png') or val.endswith('.svg')):
+                        entry['type'] = 'file'
+                    model_fields.setdefault(key, []).append(entry)
+
         for var_name, tpl_locations in template_variables.items():
             data_locations = []
-            if data_dir:
-                from generator import find_variable_in_data
-                data_locations = find_variable_in_data(data_dir, var_name)
+
+            # Check global data
+            if var_name in global_keys:
+                val = global_keys[var_name]
+                data_locations.append({
+                    'file': val if val.startswith('data/') else f'data.txt',
+                    'type': 'global',
+                    'value': val
+                })
+
+            # Check model fields
+            if var_name in model_fields:
+                for loc in model_fields[var_name][:20]:
+                    if loc['type'] == 'file':
+                        data_locations.append({
+                            'file': loc['value'],
+                            'type': 'file',
+                            'model': loc['model'],
+                            'item': loc['item']
+                        })
+                    else:
+                        data_locations.append({
+                            'file': f"data/{loc['model']}/{loc['item']}/data.txt",
+                            'type': 'key',
+                            'model': loc['model'],
+                            'item': loc['item'],
+                            'value': loc['value']
+                        })
+
             usage_index[var_name] = {
                 'exists': len(data_locations) > 0,
                 'template_locations': tpl_locations,
                 'data_locations': data_locations
             }
-        
+
         return usage_index
 
 

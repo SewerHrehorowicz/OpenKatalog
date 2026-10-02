@@ -100,12 +100,13 @@ function updateDecorations() {
         // Case 1: Interpolated string "{var1} {var2}"
         const trimmed = afterArrow.trim();
         if (trimmed.startsWith('"')) {
-            const re = /\{([a-zA-Z_]\w*)\}/g;
+            const re = /\{([^}]+)\}/g;
             let m;
             while ((m = re.exec(afterArrow)) !== null) {
-                const varName = m[1];
+                const varName = m[1].trim();
+                if (!varName) continue;
                 const start = arrowPos + 2 + m.index + 1; // skip {
-                const len = varName.length;
+                const len = m[0].length - 2; // exclude { }
                 const range = new vscode.Range(i, start, i, start + len);
                 const info = usageIndex[varName];
                 if (info && info.exists) {
@@ -171,10 +172,11 @@ function doProvideHover(document, position) {
     // Check interpolated strings
     const trimmed = afterArrow.trim();
     if (trimmed.startsWith('"')) {
-        const re = /\{([a-zA-Z_]\w*)\}/g;
+        const re = /\{([^}]+)\}/g;
         let m;
         while ((m = re.exec(afterArrow)) !== null) {
-            const varName = m[1];
+            const varName = m[1].trim();
+            if (!varName) continue;
             if (!usageIndex.hasOwnProperty(varName)) continue;
             
             const start = m.index;
@@ -231,8 +233,12 @@ function makeHover(varName) {
     md.appendCodeblock(`${dataLocations.length} data location(s)`, 'openkatalog');
     md.appendMarkdown('\n\n');
     dataLocations.slice(0, 20).forEach(r => {
-        if (r.type === 'key') {
-            md.appendMarkdown(`- \`${r.file}\` line ${r.line}: key\n`);
+        if (r.type === 'key' && r.value !== undefined) {
+            md.appendMarkdown(`- \`${r.file}\`: **"${r.value}"**\n`);
+        } else if (r.type === 'file') {
+            md.appendMarkdown(`- \`${r.file}\`\n`);
+        } else if (r.type === 'global') {
+            md.appendMarkdown(`- \`${r.file}\`: **"${r.value}"**\n`);
         } else {
             md.appendMarkdown(`- \`${r.file}\`\n`);
         }

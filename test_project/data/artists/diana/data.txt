@@ -1,0 +1,5 @@
+first_name: Diana
+last_name: Kowalska
+contact: diana@example.com
+description: Malarka abstrakcyjna
+town: Gdynia

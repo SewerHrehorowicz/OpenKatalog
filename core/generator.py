@@ -33,16 +33,29 @@ def extract_template_variables(nodes, variables=None):
                     'file': os.path.basename(node.get('file', '')),
                     'line': node.get('line', 0)
                 })
-            # Case 2: Interpolated string - extract {var_name} patterns
+            # Case 2: Interpolated string - extract chain patterns like {artist.first_name}
             elif clean_mapping.startswith('"'):
-                string_vars = re.findall(r'\{([a-zA-Z_]\w*)\}', clean_mapping)
+                string_vars = re.findall(r'\{([^}]+)\}', clean_mapping)
                 for var in string_vars:
+                    var = var.strip()
+                    if not var:
+                        continue
+                    # Store the full chain (e.g. artist.first_name)
                     if var not in variables:
                         variables[var] = []
                     variables[var].append({
                         'file': os.path.basename(node.get('file', '')),
                         'line': node.get('line', 0)
                     })
+                    # Also store leaf identifiers so hover can resolve chains even
+                    # if the exact chain wasn't indexed elsewhere.
+                    for leaf in re.findall(r'\.([a-zA-Z_]\w*)', var):
+                        if leaf not in variables:
+                            variables[leaf] = []
+                        variables[leaf].append({
+                            'file': os.path.basename(node.get('file', '')),
+                            'line': node.get('line', 0)
+                        })
             # Case 3: Complex mapping - extract variable after 'as' keyword
             #           and variable names from method arguments
             else:
